@@ -18,6 +18,7 @@ import {
 import { BreadcrumbTrail } from './BreadcrumbTrail';
 import { notify } from './notifier';
 import { getMessageFromArgs, getOsName } from './utils';
+import { detect } from 'detect-browser';
 
 class Client implements BugsnagStatic, ClientJs {
   Breadcrumb = Breadcrumb;
@@ -94,7 +95,6 @@ class Client implements BugsnagStatic, ClientJs {
       ...(this.#session?.startedAt && { duration: Date.now() - this.#session.startedAt.getTime() }),
     };
     event.breadcrumbs = this.#trail.getBreadcrumbs();
-    event.device = this.#getDevice();
 
     // Perform some work in separate async function so getBreadcrumbs is executed synchronously
     // (adding the async keyword delays execution)
@@ -395,21 +395,11 @@ class Client implements BugsnagStatic, ClientJs {
   #createSession(): Session {
     const s = new Session();
     if (this.#config.user) this.#updateSessionUser(s, this.#config.user);
-    s.device = this.#getDevice();
     return s;
   }
 
   #updateSessionUser(session: Session, user: User): void {
     session.setUser(user.id, user.email, user.name);
-  }
-
-  #getDevice(): Device {
-    return {
-      locale: navigator.language,
-      time: new Date(),
-      userAgent: navigator.userAgent,
-      osName: getOsName(),
-    };
   }
 }
 

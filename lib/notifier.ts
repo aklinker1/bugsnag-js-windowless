@@ -1,13 +1,5 @@
-import {
-  App,
-  BreadcrumbType,
-  Device,
-  Event,
-  FeatureFlag,
-  Logger,
-  NotifiableError,
-  User,
-} from '@bugsnag/core';
+import { App, BreadcrumbType, Device, Event, FeatureFlag, Logger, User } from '@bugsnag/core';
+import { detect } from 'detect-browser';
 
 // Types
 
@@ -33,7 +25,7 @@ interface ApiEvent {
   };
   user?: User;
   app?: ApiApp;
-  device?: Device;
+  device?: ApiDevice;
   featureFlags?: ApiFeatureFlag[];
   metaData: Record<string, Record<string, any>>;
 }
@@ -57,6 +49,11 @@ interface ApiBreadcrumb {
   name: string;
   type: BreadcrumbType;
   metaData?: Record<string, any>;
+}
+
+interface ApiDevice extends Device {
+  browserName?: string;
+  browserVersion?: string;
 }
 
 interface ApiApp extends App {
@@ -91,6 +88,7 @@ export async function notify(event: Event, logger: Logger | undefined) {
     const featureFlags: FeatureFlag[] | undefined = event._featureFlags;
     // @ts-expect-error _handledState is not typed
     const handledState: any = event._handledState;
+    const browser = detect(navigator.userAgent);
 
     const headers = {
       'Content-Type': 'application/json',
@@ -135,7 +133,14 @@ export async function notify(event: Event, logger: Logger | undefined) {
             metaData: b.metadata,
           })),
           context: event.context,
-          device: event.device,
+          device: {
+            locale: navigator.language,
+            time: new Date(),
+            userAgent: navigator.userAgent,
+            osName: browser?.os ?? undefined,
+            browserName: browser?.name,
+            browserVersion: browser?.version ?? undefined,
+          },
           featureFlags: featureFlags?.map<ApiFeatureFlag>(({ name, variant }) => ({
             featureFlag: name,
             variant: variant ?? undefined,

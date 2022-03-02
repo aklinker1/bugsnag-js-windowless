@@ -30,9 +30,8 @@ Bugsnag.start({ apiKey: 'your-api-key' });
 
 ### Differences
 
-These are the differences between `@bugsnag/js`'s and `bugsnag-js-windowless`'s behavior that I will not fix. I will however accept contributions to add support for them!
+These are the differences between `@bugsnag/js`'s and `bugsnag-js-windowless`'s behavior that I don't care about for my use case. I will however accept PRs to add support for them!
 
-- Limited device details (no good libs that do this without `window`)
 - Fetch/XHR request errors are not reported
 
 ## Contributing

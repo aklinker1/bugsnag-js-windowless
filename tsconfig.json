@@ -1,17 +1,21 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "lib": ["ESNext", "WebWorker"],
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "moduleResolution": "Node",
     "strict": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "declarationMap": true,
-    "outFile": "dist/index.d.ts"
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "paths": {
+      "bugsnag-js-windowless": ["./lib"]
+    }
   },
   "exclude": ["dist"]
 }

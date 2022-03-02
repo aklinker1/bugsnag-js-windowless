@@ -13,9 +13,11 @@ import {
   OnSessionCallback,
   OnBreadcrumbCallback,
   Device,
+  Logger,
 } from '@bugsnag/core';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
-import { getOsName } from './utils';
+import { notify } from './notifier';
+import { getMessageFromArgs, getOsName } from './utils';
 
 class Client implements BugsnagStatic, ClientJs {
   Breadcrumb = Breadcrumb;
@@ -28,6 +30,11 @@ class Client implements BugsnagStatic, ClientJs {
   #metadata: { [section: string]: any } = {};
   #trail = new BreadcrumbTrail();
   #featureFlags: FeatureFlag[] = [];
+  #onErrorCallbacks = new Set<OnErrorCallback>();
+  #onSessionCallbacks = new Set<OnSessionCallback>();
+  #onBreadcrumbCallbacks = new Set<OnBreadcrumbCallback>();
+  #ogConsole = { ...console };
+  #internalLogger: Logger | undefined;
 
   // BugsnagStatic methods
 
@@ -51,8 +58,11 @@ class Client implements BugsnagStatic, ClientJs {
     const event = Event.create(
       error,
       true,
-      // @ts-ignore - this is fine, it gets defaulted
-      undefined,
+      {
+        unhandled: false,
+        severity: 'warning',
+        severityReason: { type: 'handledException' },
+      },
       'notify()',
       1,
       this.#config.logger ?? undefined,
@@ -65,6 +75,10 @@ class Client implements BugsnagStatic, ClientJs {
     onError?: OnErrorCallback,
     cb?: (err: any, event: Event) => void,
   ): void {
+    if (this.#session == null) {
+      this.#internalLogger?.debug('notify called before Bugsnag.start()');
+      return;
+    }
     Object.entries(this.#metadata).forEach(([section, metadata]) => {
       event.addMetadata(section, metadata);
     });
@@ -78,7 +92,36 @@ class Client implements BugsnagStatic, ClientJs {
       version: this.#config.appVersion,
       ...(this.#session?.startedAt && { duration: Date.now() - this.#session.startedAt.getTime() }),
     };
-    throw Error('Not implemented');
+    event.breadcrumbs = this.#trail.getBreadcrumbs();
+    event.device = this.#getDevice();
+
+    // Perform some work in separate async function so getBreadcrumbs is executed synchronously
+    // (adding the async keyword delays execution)
+    const asyncWork = async () => {
+      const callbacks = Array.from(this.#onErrorCallbacks ?? []);
+      if (onError) callbacks.push(onError);
+
+      let shouldSend: boolean | void = true;
+      const shouldSendCb = (_: unknown, innerShouldSend?: boolean) => {
+        shouldSend = shouldSend && (innerShouldSend ?? false);
+      };
+      const resultsPromise = Promise.all(callbacks.map(cb => cb(event, shouldSendCb), true));
+      if (!shouldSend) return;
+      shouldSend =
+        (await resultsPromise).reduce(
+          (flag, result) =>
+            // Run all the callbacks by putting the call before "&& flag"
+            (result ?? true) && flag,
+          true,
+        ) ?? true;
+
+      if (onError != null) {
+        this.#internalLogger?.warn('onError arg not implemented for notify');
+        throw Error('onError arg not implemented');
+      }
+      await notify(event, this.#internalLogger ?? undefined);
+    };
+    asyncWork().catch(err => cb?.(event, err));
   }
 
   // breadcrumbs
@@ -92,6 +135,17 @@ class Client implements BugsnagStatic, ClientJs {
     breadcrumb.message = message;
     breadcrumb.metadata = metadata ?? {};
     breadcrumb.type = type ?? 'log';
+
+    const callbacks = Array.from(this.#onBreadcrumbCallbacks ?? []);
+    const shouldLeaveBreadcrumb = callbacks.reduce(
+      (flag, cb) =>
+        // Run all the callbacks by putting the call before "&& flag"
+        (cb(breadcrumb) ?? true) && flag,
+      true,
+    );
+    if (!shouldLeaveBreadcrumb) return;
+
+    this.#internalLogger?.debug('Leaving breadcrumb', breadcrumb);
     this.#trail.add(breadcrumb);
   }
 
@@ -113,13 +167,14 @@ class Client implements BugsnagStatic, ClientJs {
         this.#metadata[section][key] = value;
       });
     }
+    this.#internalLogger?.debug('New metadata', this.#metadata);
   }
 
   public getMetadata(section: string, key?: string): any {
     if (key != null) {
-      return this.#metadata[section]?.[key];
+      return Object.freeze(this.#metadata[section]?.[key]);
     }
-    return this.#metadata[section];
+    return Object.freeze(this.#metadata[section]);
   }
 
   public clearMetadata(section: string, key?: string): void {
@@ -131,16 +186,19 @@ class Client implements BugsnagStatic, ClientJs {
     } else {
       delete this.#metadata[section];
     }
+    this.#internalLogger?.debug('New metadata', this.#metadata);
   }
 
   // feature flags
 
   public addFeatureFlag(name: string, variant?: string | null): void {
     this.#featureFlags.push({ name, variant });
+    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public addFeatureFlags(featureFlags: FeatureFlag[]): void {
     this.#featureFlags.push(...featureFlags);
+    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public clearFeatureFlag(name: string): void {
@@ -148,10 +206,12 @@ class Client implements BugsnagStatic, ClientJs {
     if (index >= 0) {
       this.#featureFlags.splice(index, 1);
     }
+    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public clearFeatureFlags(): void {
     this.#featureFlags = [];
+    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   // context
@@ -162,28 +222,48 @@ class Client implements BugsnagStatic, ClientJs {
 
   public setContext(c: string): void {
     this.#config.context = c;
+    this.#internalLogger?.debug('New context:', this.#featureFlags);
   }
 
   // user
+
   public getUser(): User {
-    throw Error('Not implemented');
+    return Object.freeze(this.#config.user ?? {});
   }
 
   public setUser(id?: string, email?: string, name?: string): void {
-    throw Error('Not implemented');
+    this.#config.user ||= {};
+    this.#config.user.id = id;
+    this.#config.user.email = email;
+    this.#config.user.name = name;
+    this.#internalLogger?.debug('New context:', this.#featureFlags);
   }
 
   // sessions
 
   startSession(): ClientJs {
+    const session = this.#createSession();
+
+    const callbacks = Array.from(this.#onSessionCallbacks ?? []);
+    const shouldStart = callbacks.reduce(
+      (flag, cb) =>
+        // Run all the callbacks by putting the call before "&& flag"
+        (cb(session) ?? true) && flag,
+      true,
+    );
+    if (!shouldStart) return this;
+
+    this.#session = session;
     this.#pausedSession = undefined;
-    this.#session = this.#createSession();
+    this.#init();
+    this.#internalLogger?.debug('notify called before Bugsnag.start()');
     return this;
   }
 
   pauseSession(): ClientJs {
     this.#pausedSession = this.#session;
     this.#session = undefined;
+    this.#unload();
     return this;
   }
 
@@ -193,33 +273,34 @@ class Client implements BugsnagStatic, ClientJs {
 
     this.#session = this.#pausedSession;
     this.#pausedSession = undefined;
+    this.#init();
     return this;
   }
 
   // Listeners
 
   public addOnError(fn: OnErrorCallback): void {
-    throw Error('Not implemented');
+    this.#onErrorCallbacks.add(fn);
   }
 
   public removeOnError(fn: OnErrorCallback): void {
-    throw Error('Not implemented');
+    this.#onErrorCallbacks.delete(fn);
   }
 
   public addOnSession(fn: OnSessionCallback): void {
-    throw Error('Not implemented');
+    this.#onSessionCallbacks.add(fn);
   }
 
   public removeOnSession(fn: OnSessionCallback): void {
-    throw Error('Not implemented');
+    this.#onSessionCallbacks.delete(fn);
   }
 
   public addOnBreadcrumb(fn: OnBreadcrumbCallback): void {
-    throw Error('Not implemented');
+    this.#onBreadcrumbCallbacks.add(fn);
   }
 
   public removeOnBreadcrumb(fn: OnBreadcrumbCallback): void {
-    throw Error('Not implemented');
+    this.#onBreadcrumbCallbacks.delete(fn);
   }
 
   // Plugins
@@ -242,15 +323,82 @@ class Client implements BugsnagStatic, ClientJs {
     if (typeof apiKeyOrOpts === 'string') {
       this.#config = { apiKey: apiKeyOrOpts };
     } else {
-      this.#config = apiKeyOrOpts;
+      this.#config = { ...apiKeyOrOpts };
     }
+    this.#config.logger = this.#config.logger === undefined ? console : this.#config.logger;
+    this.#internalLogger = this.#config.logger ? this.#ogConsole : undefined;
     this.#trail.setMaxLength(this.#config.maxBreadcrumbs ?? 25);
   }
 
   #init() {
-    // self.onerror = event => {
-    //   this._notify(event);
-    // };
+    // Load plugins
+    this.#config.plugins?.forEach(plugin => plugin.load(this));
+
+    // Listen for unhandled errors
+    self.addEventListener('error', this.#onError);
+    self.addEventListener('unhandledrejection', this.#onUnhandledRejection);
+
+    // Override console methods
+    console.debug = (...args: any[]) => {
+      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+      this.#ogConsole.debug(...args);
+    };
+    console.log = (...args: any[]) => {
+      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+      this.#ogConsole.log(...args);
+    };
+    console.info = (...args: any[]) => {
+      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+      this.#ogConsole.info(...args);
+    };
+    console.warn = (...args: any[]) => {
+      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+      this.#ogConsole.warn(...args);
+    };
+    console.error = (...args: any[]) => {
+      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+      this.#ogConsole.error(...args);
+    };
+  }
+
+  #unload() {
+    // Destroy plugins
+    this.#config.plugins?.forEach(plugin => plugin.destroy?.());
+
+    // Remove listeners for unhandled errors
+    self.removeEventListener('error', this.#onError);
+    self.removeEventListener('unhandledrejection', this.#onUnhandledRejection);
+
+    // Reset console
+    console.debug = this.#ogConsole.debug;
+    console.log = this.#ogConsole.log;
+    console.info = this.#ogConsole.info;
+    console.warn = this.#ogConsole.warn;
+    console.error = this.#ogConsole.error;
+  }
+
+  #notifyUnhandled(maybeError: any, component: string, severityType: string): void {
+    const event = Event.create(
+      maybeError,
+      true,
+      {
+        unhandled: true,
+        severity: 'error',
+        severityReason: { type: severityType },
+      },
+      component,
+      0,
+      this.#config.logger ?? undefined,
+    );
+    this._notify(event);
+  }
+
+  #onError(e: ErrorEvent) {
+    this.#notifyUnhandled(e, 'self.onerror()', 'unhandledException');
+  }
+
+  #onUnhandledRejection(e: PromiseRejectionEvent) {
+    this.#notifyUnhandled(e.reason, 'self.onunhandledrejection()', 'unhandledPromiseRejection');
   }
 
   #createSession(): Session {

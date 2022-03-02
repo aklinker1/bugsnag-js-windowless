@@ -1,13 +1,19 @@
 import { execSync } from 'child_process';
 import { defineConfig, Plugin } from 'vite';
 import pkg from './package.json';
+import { config } from 'dotenv';
+
+// Load .env
+config();
+
+console.log('api key', process.env.VITE_API_KEY);
 
 function tsc(): Plugin {
   let isDevServer = false;
   let hasRan = false;
 
   return {
-    name: 'tsc',
+    name: 'tsc -p tsconfig.build.json --emitDeclarationOnly',
     config(_, { command }) {
       isDevServer = command === 'serve';
     },
@@ -17,7 +23,7 @@ function tsc(): Plugin {
     writeBundle() {
       if (isDevServer || hasRan) return;
 
-      console.log('\x1b[0m\x1b[2m[tsc] Compiling\x1b[0m');
+      console.log('\x1b[0m\x1b[2m[tsc] Compiling...\x1b[0m');
       execSync('tsc', { stdio: 'inherit' });
       hasRan = true;
     },
@@ -45,5 +51,10 @@ export default defineConfig({
   define: {
     __LIB_VERSION__: `"${pkg.version}"`,
     __LIB_REPO_URL__: `"${pkg.repository}"`,
+  },
+  resolve: {
+    alias: {
+      'bugsnag-js-windowless': '/lib',
+    },
   },
 });

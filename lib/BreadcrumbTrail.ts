@@ -7,9 +7,9 @@ export class BreadcrumbTrail {
   #maxLength = BreadcrumbTrail.DEFAULT_MAX_LENGTH;
 
   add(breadcrumb: Breadcrumb) {
-    this.#list.push(breadcrumb);
+    this.#list.unshift(breadcrumb);
 
-    // Don't reset immediately after going over, wait a bit
+    // Don't trim the end immediately after going over, wait a bit
     if (this.#list.length > 2 * this.#maxLength) {
       this.#list.length = this.#maxLength;
     }
@@ -20,6 +20,6 @@ export class BreadcrumbTrail {
   }
 
   getBreadcrumbs(): Breadcrumb[] {
-    return this.#list.slice(0, this.#maxLength);
+    return this.#list.slice(0, this.#maxLength).reverse();
   }
 }

@@ -116,7 +116,6 @@ export async function notify(event: Event, logger: Logger | undefined) {
                 .split('\n')
                 .filter(line => !!line.trim())
                 .map<ApiStacktrace>(line => {
-                  logger?.debug(line);
                   const matches = STACKTRACE_REGEX.exec(line)!;
                   return {
                     method: matches[1] || 'inline',

@@ -79,6 +79,7 @@ class Client implements BugsnagStatic, ClientJs {
       this.#internalLogger?.debug('notify called before Bugsnag.start()');
       return;
     }
+
     Object.entries(this.#metadata).forEach(([section, metadata]) => {
       event.addMetadata(section, metadata);
     });
@@ -145,7 +146,6 @@ class Client implements BugsnagStatic, ClientJs {
     );
     if (!shouldLeaveBreadcrumb) return;
 
-    this.#internalLogger?.debug('Leaving breadcrumb', breadcrumb);
     this.#trail.add(breadcrumb);
   }
 
@@ -167,7 +167,6 @@ class Client implements BugsnagStatic, ClientJs {
         this.#metadata[section][key] = value;
       });
     }
-    this.#internalLogger?.debug('New metadata', this.#metadata);
   }
 
   public getMetadata(section: string, key?: string): any {
@@ -186,19 +185,16 @@ class Client implements BugsnagStatic, ClientJs {
     } else {
       delete this.#metadata[section];
     }
-    this.#internalLogger?.debug('New metadata', this.#metadata);
   }
 
   // feature flags
 
   public addFeatureFlag(name: string, variant?: string | null): void {
     this.#featureFlags.push({ name, variant });
-    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public addFeatureFlags(featureFlags: FeatureFlag[]): void {
     this.#featureFlags.push(...featureFlags);
-    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public clearFeatureFlag(name: string): void {
@@ -206,12 +202,10 @@ class Client implements BugsnagStatic, ClientJs {
     if (index >= 0) {
       this.#featureFlags.splice(index, 1);
     }
-    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   public clearFeatureFlags(): void {
     this.#featureFlags = [];
-    this.#internalLogger?.debug('Feature flags', this.#featureFlags);
   }
 
   // context
@@ -222,7 +216,6 @@ class Client implements BugsnagStatic, ClientJs {
 
   public setContext(c: string): void {
     this.#config.context = c;
-    this.#internalLogger?.debug('New context:', this.#featureFlags);
   }
 
   // user
@@ -236,7 +229,6 @@ class Client implements BugsnagStatic, ClientJs {
     this.#config.user.id = id;
     this.#config.user.email = email;
     this.#config.user.name = name;
-    this.#internalLogger?.debug('New context:', this.#featureFlags);
   }
 
   // sessions
@@ -256,7 +248,6 @@ class Client implements BugsnagStatic, ClientJs {
     this.#session = session;
     this.#pausedSession = undefined;
     this.#init();
-    this.#internalLogger?.debug('notify called before Bugsnag.start()');
     return this;
   }
 

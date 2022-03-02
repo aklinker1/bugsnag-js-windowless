@@ -24,6 +24,10 @@ Bugsnag.start({ apiKey: 'your-api-key' });
 - Exact same API and types as `@bugsnag/js` ([docs](https://docs.bugsnag.com/platforms/javascript/configuration-options))
 - No dependencies
 
+### Todo
+
+- [ ] Make sure all config is respected: <https://docs.bugsnag.com/platforms/javascript/configuration-options>
+
 ### Differences
 
 These are the differences between `@bugsnag/js`'s and `bugsnag-js-windowless`'s behavior that I will not fix. I will however accept contributions to add support for them!

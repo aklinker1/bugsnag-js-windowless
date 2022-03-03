@@ -30,6 +30,7 @@
   ],
   "main": "./dist/index.umd.js",
   "module": "./dist/index.es.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.es.js",
@@ -44,7 +45,8 @@
     "build": "vite build",
     "prepare": "husky install",
     "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test:watch": "jest --watchAll",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@bugsnag/core": "^7.16.1",

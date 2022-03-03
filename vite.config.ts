@@ -13,7 +13,7 @@ function tsc(): Plugin {
   let hasRan = false;
 
   return {
-    name: 'tsc -p tsconfig.build.json --emitDeclarationOnly',
+    name: 'tsc',
     config(_, { command }) {
       isDevServer = command === 'serve';
     },
@@ -24,7 +24,7 @@ function tsc(): Plugin {
       if (isDevServer || hasRan) return;
 
       console.log('\x1b[0m\x1b[2m[tsc] Compiling...\x1b[0m');
-      execSync('tsc', { stdio: 'inherit' });
+      execSync('tsc -p tsconfig.build.json', { stdio: 'inherit' });
       hasRan = true;
     },
     closeBundle() {

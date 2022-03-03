@@ -65,5 +65,6 @@
   },
   "peerDependencies": {
     "@bugsnag/core": "^7.16.1"
-  }
+  },
+  "version": "1.0.0"
 }

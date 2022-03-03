@@ -92,7 +92,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./*.tgz
+          asset_path: ./bugsnag-js-windowless-${{ steps.changelog.outputs.version }}.tgz
+          asset_name: bugsnag-js-windowless-${{ steps.changelog.outputs.version }}.tgz
+          asset_content_type: application/gzip
 
       - name: NPM Publish
         uses: JS-DevTools/npm-publish@v1

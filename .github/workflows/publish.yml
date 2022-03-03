@@ -1,0 +1,85 @@
+name: Publish
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    name: Verify Code
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install Node 16
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      - uses: pnpm/action-setup@v2.1.0
+        with:
+          version: 6.31.0
+          run_install: true
+
+      - name: Check Formatting
+        run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+  version:
+    name: Bump Version
+    runs-on: ubuntu-20.04
+    needs: [verify]
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Create Changelog
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v3
+        with:
+          github-token: ${{ secrets.github_token }}
+          output-file: 'false'
+          fallback-version: '1.0.0'
+
+  publish:
+    name: Publish to NPM
+    runs-on: ubuntu-20.04
+    needs: [version]
+    steps:
+      - name: Install Node 16
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      - uses: pnpm/action-setup@v2.1.0
+        with:
+          version: 6.31.0
+          run_install: true
+
+      - name: NPM Publish
+        uses: JS-DevTools/npm-publish@v1
+        with:
+          token: ${{ secrets.NPM_TOKEN }}

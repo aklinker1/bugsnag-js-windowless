@@ -1,0 +1,39 @@
+name: Verify
+on:
+  - push
+  - pull_request
+
+jobs:
+  verify:
+    name: Verify Code
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install Node 16
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
+
+      - uses: pnpm/action-setup@v2.1.0
+        with:
+          version: 6.31.0
+          run_install: true
+
+      - name: Check Formatting
+        run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test

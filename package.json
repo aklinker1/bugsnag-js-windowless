@@ -1,7 +1,7 @@
 {
   "name": "bugsnag-js-windowless",
   "description": "Bugsnag client for JS contexts without the 'window' global",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "lib",
     "dist"

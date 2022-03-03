@@ -20,6 +20,8 @@ export class BreadcrumbTrail {
   }
 
   getBreadcrumbs(): Breadcrumb[] {
-    return this.#list.slice(0, this.#maxLength).reverse();
+    return this.#list
+      .slice(0, this.#maxLength)
+      .sort((l, r) => r.timestamp.getTime() - l.timestamp.getTime());
   }
 }

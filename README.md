@@ -33,6 +33,10 @@ Bugsnag.start({ apiKey: 'your-api-key' });
 These are the differences between `@bugsnag/js`'s and `bugsnag-js-windowless`'s behavior that I don't care about for my use case. I will however accept PRs to add support for them!
 
 - Fetch/XHR request errors are not reported
+- Full session tracking (including `config.autoTrackSessions`) is not implemented
+- [`config.collectUserIp`](https://docs.bugsnag.com/platforms/javascript/configuration-options/#collectuserip) is not implemented and thus disabled by default
+- [`config.maxEvents`](https://docs.bugsnag.com/platforms/javascript/configuration-options/#maxevents) is not implemented - all events are collected
+- [`config.trackInlineScripts`](https://docs.bugsnag.com/platforms/javascript/configuration-options/#trackinlinescripts) is not implemented - this isn't really relevant to the JS contexts I built this for (chrome extension service workers)
 
 ## Contributing
 
@@ -51,6 +55,9 @@ edit .env
 
 # Start the demo application
 pnpm start
+
+# Run unit tests
+pnpm test
 
 # Type check and output to `dist/` directory
 pnpm build

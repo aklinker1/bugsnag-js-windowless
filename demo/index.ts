@@ -2,8 +2,15 @@ import Bugsnag from 'bugsnag-js-windowless';
 
 window.onerror = console.error;
 
-console.log(import.meta);
-Bugsnag.start(import.meta.env.VITE_API_KEY);
+Bugsnag.start({
+  apiKey: import.meta.env.VITE_API_KEY,
+  appType: 'demo',
+  appVersion: __LIB_VERSION__,
+  context: 'Demo Page',
+  user: {
+    name: 'aklinker1',
+  },
+});
 
 const buttonFns = [
   function debug() {

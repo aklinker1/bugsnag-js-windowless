@@ -1,5 +1,4 @@
 import {
-  Config,
   BugsnagStatic,
   Breadcrumb,
   Event,
@@ -12,13 +11,12 @@ import {
   User,
   OnSessionCallback,
   OnBreadcrumbCallback,
-  Device,
   Logger,
 } from '@bugsnag/core';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
-import { notify } from './notifier';
-import { getMessageFromArgs, getOsName } from './utils';
-import { detect } from 'detect-browser';
+import { Config } from './config';
+import { postEvent } from './http';
+import { generateAnonymousUserId, getMessageFromArgs, redactMetadata } from './utils';
 
 class Client implements BugsnagStatic, ClientJs {
   Breadcrumb = Breadcrumb;
@@ -40,13 +38,18 @@ class Client implements BugsnagStatic, ClientJs {
   // BugsnagStatic methods
 
   start(apiKeyOrOpts: string | Config): ClientJs {
+    if (this.#session != null) {
+      this.#internalLogger?.warn('Bugsnag.start() has already been called');
+    }
     this.#setConfig(apiKeyOrOpts);
+    this.#onStart();
     this.startSession();
     return this;
   }
   createClient(apiKeyOrOpts: string | Config): ClientJs {
     this.#setConfig(apiKeyOrOpts);
-    return this.start(apiKeyOrOpts);
+    this.#onStart();
+    return this;
   }
 
   // reporting errors
@@ -80,9 +83,14 @@ class Client implements BugsnagStatic, ClientJs {
       this.#internalLogger?.debug('notify called before Bugsnag.start()');
       return;
     }
+    if (
+      this.#config.enabledReleaseStages != null &&
+      !this.#config.enabledReleaseStages.includes(this.#config.releaseStage ?? '')
+    )
+      return;
 
     Object.entries(this.#metadata).forEach(([section, metadata]) => {
-      event.addMetadata(section, metadata);
+      event.addMetadata(section, redactMetadata(this.#config.redactedKeys ?? [], metadata));
     });
     event.addFeatureFlags(this.#featureFlags);
     if (this.#config.user)
@@ -95,6 +103,7 @@ class Client implements BugsnagStatic, ClientJs {
       ...(this.#session?.startedAt && { duration: Date.now() - this.#session.startedAt.getTime() }),
     };
     event.breadcrumbs = this.#trail.getBreadcrumbs();
+    event.context = this.#config.context;
 
     // Perform some work in separate async function so getBreadcrumbs is executed synchronously
     // (adding the async keyword delays execution)
@@ -102,25 +111,25 @@ class Client implements BugsnagStatic, ClientJs {
       const callbacks = Array.from(this.#onErrorCallbacks ?? []);
       if (onError) callbacks.push(onError);
 
+      // Cancel the report if any of the onErrors say to
       let shouldSend: boolean | void = true;
-      const shouldSendCb = (_: unknown, innerShouldSend?: boolean) => {
-        shouldSend = shouldSend && (innerShouldSend ?? false);
+      const shouldSendCb = (err: null | Error, innerShouldSend?: boolean) => {
+        if (err != null || innerShouldSend === false) {
+          shouldSend = shouldSend && false;
+        }
       };
-      const resultsPromise = Promise.all(callbacks.map(cb => cb(event, shouldSendCb), true));
-      if (!shouldSend) return;
-      shouldSend =
-        (await resultsPromise).reduce(
-          (flag, result) =>
-            // Run all the callbacks by putting the call before "&& flag"
-            (result ?? true) && flag,
-          true,
-        ) ?? true;
-
-      if (onError != null) {
-        this.#internalLogger?.warn('onError arg not implemented for notify');
-        throw Error('onError arg not implemented');
+      for (const cb of callbacks) {
+        if (shouldSend) {
+          let res = cb(event, shouldSendCb);
+          if (res instanceof Promise) {
+            res = await res;
+          }
+          shouldSend = shouldSend && (res ?? true);
+        }
       }
-      await notify(event, this.#internalLogger ?? undefined);
+      if (!shouldSend) return;
+
+      await postEvent(event, this.#internalLogger ?? undefined, this.#config);
     };
     asyncWork().catch(err => cb?.(event, err));
   }
@@ -132,10 +141,17 @@ class Client implements BugsnagStatic, ClientJs {
     metadata?: { [key: string]: any },
     type?: BreadcrumbType,
   ): void {
+    type ??= 'log';
+    if (
+      this.#config.enabledBreadcrumbTypes != null &&
+      !this.#config.enabledBreadcrumbTypes.includes(type)
+    ) {
+      return;
+    }
     const breadcrumb = new Breadcrumb();
     breadcrumb.message = message;
     breadcrumb.metadata = metadata ?? {};
-    breadcrumb.type = type ?? 'log';
+    breadcrumb.type = type;
 
     const callbacks = Array.from(this.#onBreadcrumbCallbacks ?? []);
     const shouldLeaveBreadcrumb = callbacks.reduce(
@@ -247,7 +263,7 @@ class Client implements BugsnagStatic, ClientJs {
 
     this.#session = session;
     this.#pausedSession = undefined;
-    this.#init();
+    this.#initSession();
     return this;
   }
 
@@ -264,7 +280,7 @@ class Client implements BugsnagStatic, ClientJs {
 
     this.#session = this.#pausedSession;
     this.#pausedSession = undefined;
-    this.#init();
+    this.#initSession();
     return this;
   }
 
@@ -317,39 +333,117 @@ class Client implements BugsnagStatic, ClientJs {
       this.#config = { ...apiKeyOrOpts };
     }
     this.#config.logger = this.#config.logger === undefined ? console : this.#config.logger;
-    this.#internalLogger = this.#config.logger ? this.#ogConsole : undefined;
-    this.#trail.setMaxLength(this.#config.maxBreadcrumbs ?? 25);
+    this.#internalLogger = this.#config.logger
+      ? {
+          debug: (...args) => {
+            this.#ogConsole.debug('[bugsnag]', ...args);
+          },
+          info: (...args) => {
+            this.#ogConsole.info('[bugsnag]', ...args);
+          },
+          warn: (...args) => {
+            this.#ogConsole.warn('[bugsnag]', ...args);
+          },
+          error: (...args) => {
+            this.#ogConsole.error('[bugsnag]', ...args);
+          },
+        }
+      : undefined;
   }
 
-  #init() {
+  #onStart() {
+    this.#trail.setMaxLength(this.#config.maxBreadcrumbs ?? 25);
+
+    this.#metadata = redactMetadata(this.#config.redactedKeys ?? [], this.#config.metadata ?? {});
+
+    if (this.#config.onBreadcrumb) {
+      this.#onBreadcrumbCallbacks = new Set();
+      if (Array.isArray(this.#config.onBreadcrumb)) {
+        this.#config.onBreadcrumb.forEach(this.addOnBreadcrumb.bind(this));
+      } else {
+        this.addOnBreadcrumb(this.#config.onBreadcrumb);
+      }
+    }
+
+    if (this.#config.onError) {
+      this.#onErrorCallbacks = new Set();
+      if (Array.isArray(this.#config.onError)) {
+        this.#config.onError.forEach(this.addOnError.bind(this));
+      } else {
+        this.addOnError(this.#config.onError);
+      }
+    }
+
+    if (this.#config.onSession) {
+      this.#onSessionCallbacks = new Set();
+      if (Array.isArray(this.#config.onSession)) {
+        this.#config.onSession.forEach(this.addOnSession.bind(this));
+      } else {
+        this.addOnSession(this.#config.onSession);
+      }
+    }
+
+    if (this.#config.featureFlags != null) {
+      this.#featureFlags = this.#config.featureFlags;
+    }
+
+    if (this.#config.generateAnonymousId !== false) {
+      this.#config.user ||= {};
+      if (this.#config.user.id == null) {
+        let existingUserId = localStorage.getItem('bugsnag-user-id');
+        if (existingUserId == null) {
+          existingUserId = generateAnonymousUserId();
+          localStorage.setItem('bugsnag-user-id', existingUserId);
+        }
+        this.#config.user.id = existingUserId;
+      }
+    }
+  }
+
+  #initSession() {
     // Load plugins
     this.#config.plugins?.forEach(plugin => plugin.load(this));
 
     // Listen for unhandled errors
-    self.addEventListener('error', this.#onError);
-    self.addEventListener('unhandledrejection', this.#onUnhandledRejection);
+    if (this.#config.autoDetectErrors !== false) {
+      const enabledUnhandledExceptions =
+        this.#config.enabledErrorTypes == null ||
+        this.#config.enabledErrorTypes.unhandledExceptions !== false;
+      const enabledUnhandledRejections =
+        this.#config.enabledErrorTypes == null ||
+        this.#config.enabledErrorTypes.unhandledRejections !== false;
+
+      if (enabledUnhandledExceptions) self.addEventListener('error', this.#onError);
+      if (enabledUnhandledRejections)
+        self.addEventListener('unhandledrejection', this.#onUnhandledRejection);
+    }
 
     // Override console methods
-    console.debug = (...args: any[]) => {
-      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
-      this.#ogConsole.debug(...args);
-    };
-    console.log = (...args: any[]) => {
-      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
-      this.#ogConsole.log(...args);
-    };
-    console.info = (...args: any[]) => {
-      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
-      this.#ogConsole.info(...args);
-    };
-    console.warn = (...args: any[]) => {
-      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
-      this.#ogConsole.warn(...args);
-    };
-    console.error = (...args: any[]) => {
-      this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
-      this.#ogConsole.error(...args);
-    };
+    const isCollectingLogBreadcrumbs =
+      this.#config.enabledBreadcrumbTypes == null ||
+      this.#config.enabledBreadcrumbTypes.includes('log');
+    if (this.#config.releaseStage !== 'development' && isCollectingLogBreadcrumbs) {
+      console.debug = (...args: any[]) => {
+        this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+        this.#ogConsole.debug(...args);
+      };
+      console.log = (...args: any[]) => {
+        this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+        this.#ogConsole.log(...args);
+      };
+      console.info = (...args: any[]) => {
+        this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+        this.#ogConsole.info(...args);
+      };
+      console.warn = (...args: any[]) => {
+        this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+        this.#ogConsole.warn(...args);
+      };
+      console.error = (...args: any[]) => {
+        this.leaveBreadcrumb(getMessageFromArgs(args), undefined, 'log');
+        this.#ogConsole.error(...args);
+      };
+    }
   }
 
   #unload() {
@@ -403,6 +497,4 @@ class Client implements BugsnagStatic, ClientJs {
   }
 }
 
-const BugsnagSw: BugsnagStatic = new Client();
-
-export default BugsnagSw;
+export default new Client();

@@ -1,5 +1,6 @@
 import { App, BreadcrumbType, Device, Event, FeatureFlag, Logger, User } from '@bugsnag/core';
 import { detect } from 'detect-browser';
+import { Config } from './config';
 
 // Types
 
@@ -17,6 +18,7 @@ interface Body {
 interface ApiEvent {
   exceptions: ApiException[];
   breadcrumbs?: ApiBreadcrumb[];
+  request?: ApiRequest;
   context?: string;
   unhandled?: boolean;
   severity?: string;
@@ -56,6 +58,10 @@ interface ApiDevice extends Device {
   browserVersion?: string;
 }
 
+interface ApiRequest {
+  clientIp?: string;
+}
+
 interface ApiApp extends App {
   id?: string;
 }
@@ -80,7 +86,7 @@ const notifier: Body['notifier'] = {
 // 4: column
 const STACKTRACE_REGEX = /^(.*?)@(.*):(.*?):(.*?)$/;
 
-export async function notify(event: Event, logger: Logger | undefined) {
+export async function postEvent(event: Event, logger: Logger | undefined, config: Config) {
   try {
     // @ts-expect-error _metadata is not typed
     const eventMetadata: ApiEvent['metaData'] = event._metadata;
@@ -90,6 +96,9 @@ export async function notify(event: Event, logger: Logger | undefined) {
     const handledState: any = event._handledState;
     const browser = detect(navigator.userAgent);
 
+    const err = getError(event.originalError);
+
+    const endpoint = config.endpoints?.notify || 'https://notify.bugsnag.com/';
     const headers = {
       'Content-Type': 'application/json',
       'Bugsnag-Api-Key': event.apiKey ?? '',
@@ -104,24 +113,22 @@ export async function notify(event: Event, logger: Logger | undefined) {
         {
           exceptions: [
             {
-              errorClass:
-                event.originalError instanceof Error
-                  ? event.originalError.constructor.name
-                  : 'Error',
+              errorClass: err.name,
               type: 'browserjs',
-              message: event.originalError.message as string,
-              stacktrace: (event.originalError.stack as string)
-                .split('\n')
-                .filter(line => !!line.trim())
-                .map<ApiStacktrace>(line => {
-                  const matches = STACKTRACE_REGEX.exec(line)!;
-                  return {
-                    method: matches[1] || 'inline',
-                    columnNumber: Number(matches[4]),
-                    file: matches[2],
-                    lineNumber: Number(matches[3]),
-                  };
-                }),
+              message: err.message,
+              stacktrace:
+                err.stack
+                  .split('\n')
+                  .filter(line => !!line.trim())
+                  .map<ApiStacktrace>(line => {
+                    const matches = STACKTRACE_REGEX.exec(line)!;
+                    return {
+                      method: matches[1] || 'inline',
+                      columnNumber: Number(matches[4]),
+                      file: matches[2],
+                      lineNumber: Number(matches[3]),
+                    };
+                  }) ?? [],
             },
           ],
           metaData: eventMetadata,
@@ -153,7 +160,7 @@ export async function notify(event: Event, logger: Logger | undefined) {
       ],
     };
 
-    await fetch('https://notify.bugsnag.com/', {
+    await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -161,4 +168,31 @@ export async function notify(event: Event, logger: Logger | undefined) {
   } catch (err) {
     logger?.error(err);
   }
+}
+
+function getError(maybeError: any): { name: string; message: string; stack: string } {
+  if (maybeError instanceof Error) {
+    return {
+      name: maybeError.name,
+      message: maybeError.message,
+      stack: maybeError.stack ?? '',
+    };
+  }
+  let str;
+  if (typeof maybeError === 'string') {
+    str = maybeError;
+  } else {
+    str = String(maybeError);
+  }
+  const error = Error(str);
+  return {
+    name: error.name,
+    message: error.message,
+    stack:
+      error.stack
+        ?.split('\n')
+        .filter(line => !!line.trim())
+        .splice(5) // This is the depth to drop all stack traces from inside the library
+        .join('\n') ?? '',
+  };
 }

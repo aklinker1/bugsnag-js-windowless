@@ -37,36 +37,10 @@ jobs:
       - name: Test
         run: pnpm test
 
-  version:
-    name: Bump Version
+  publish:
+    name: Publish
     runs-on: ubuntu-20.04
     needs: [verify]
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v2
-
-      - name: Create Changelog
-        id: changelog
-        uses: TriPSs/conventional-changelog-action@v3
-        with:
-          github-token: ${{ secrets.github_token }}
-          output-file: 'false'
-          fallback-version: '1.0.0'
-
-      - name: Create Release
-        uses: actions/create-release@v1
-        if: ${{ steps.changelog.outputs.skipped == 'false' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
-        with:
-          tag_name: ${{ steps.changelog.outputs.tag }}
-          release_name: ${{ steps.changelog.outputs.tag }}
-          body: ${{ steps.changelog.outputs.clean_changelog }}
-
-  publish:
-    name: Publish to NPM
-    runs-on: ubuntu-20.04
-    needs: [version]
     steps:
       - name: Install Node 16
         uses: actions/setup-node@v1
@@ -89,7 +63,39 @@ jobs:
           version: 6.31.0
           run_install: true
 
+      - name: Create Changelog
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v3
+        with:
+          github-token: ${{ secrets.github_token }}
+          output-file: 'false'
+          fallback-version: '1.0.0'
+
+      - name: Pack
+        run: pnpm pack
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./*.tgz
+
       - name: NPM Publish
         uses: JS-DevTools/npm-publish@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
         with:
           token: ${{ secrets.NPM_TOKEN }}

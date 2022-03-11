@@ -1,4 +1,3 @@
-import { Stackframe } from '@bugsnag/core';
 import { ApiStacktrace } from './api-types';
 
 export function getOsName(): string | undefined {

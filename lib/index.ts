@@ -389,7 +389,11 @@ class Client implements BugsnagStatic, ClientJs {
 
     if (this.#config.generateAnonymousId !== false) {
       this.#config.user ||= {};
-      if (this.#config.user.id == null) {
+      if (typeof localStorage == 'undefined') {
+        this.#config.logger?.warn(
+          "config.generateAnonymousId is true, but this JS context doesn't have access to localStorage. To disable this warning, pass config.generateAnonymousId to false",
+        );
+      } else if (this.#config.user.id == null) {
         let existingUserId = localStorage.getItem('bugsnag-user-id');
         if (existingUserId == null) {
           existingUserId = generateAnonymousUserId();

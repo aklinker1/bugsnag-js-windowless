@@ -117,9 +117,9 @@ describe('Windowless Bugsnag Client', () => {
 
         const event = postEventMock.mock.calls[0][0];
         expect(event.breadcrumbs).toHaveLength(3);
-        expect(event.breadcrumbs[0]).toMatchObject({ type: 'manual' });
+        expect(event.breadcrumbs[0]).toMatchObject({ type: 'log' });
         expect(event.breadcrumbs[1]).toMatchObject({ type: 'error' });
-        expect(event.breadcrumbs[2]).toMatchObject({ type: 'log' });
+        expect(event.breadcrumbs[2]).toMatchObject({ type: 'manual' });
       });
 
       it('should not add error breadcrumbs when notify is called if "error" is excluded from the list', () => {
@@ -134,8 +134,8 @@ describe('Windowless Bugsnag Client', () => {
 
         const event = postEventMock.mock.calls[0][0];
         expect(event.breadcrumbs).toHaveLength(2);
-        expect(event.breadcrumbs[0]).toMatchObject({ type: 'manual' });
-        expect(event.breadcrumbs[1]).toMatchObject({ type: 'log' });
+        expect(event.breadcrumbs[0]).toMatchObject({ type: 'log' });
+        expect(event.breadcrumbs[1]).toMatchObject({ type: 'manual' });
       });
 
       it('should not add log breadcrumbs when console methods are called if "log" is excluded from the list', () => {
@@ -150,8 +150,8 @@ describe('Windowless Bugsnag Client', () => {
 
         const event = postEventMock.mock.calls[0][0];
         expect(event.breadcrumbs).toHaveLength(2);
-        expect(event.breadcrumbs[0]).toMatchObject({ type: 'manual' });
-        expect(event.breadcrumbs[1]).toMatchObject({ type: 'error' });
+        expect(event.breadcrumbs[0]).toMatchObject({ type: 'error' });
+        expect(event.breadcrumbs[1]).toMatchObject({ type: 'manual' });
       });
     });
 
@@ -415,8 +415,8 @@ describe('Windowless Bugsnag Client', () => {
 
         const event = postEventMock.mock.calls[0][0];
         expect(event.breadcrumbs).toHaveLength(2);
-        expect(event.breadcrumbs[0]).toMatchObject({ message: '4' });
-        expect(event.breadcrumbs[1]).toMatchObject({ message: '3' });
+        expect(event.breadcrumbs[0]).toMatchObject({ message: '3' });
+        expect(event.breadcrumbs[1]).toMatchObject({ message: '4' });
       });
 
       it("should default to 25, matching @bugsnag/js's default", () => {

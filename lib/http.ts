@@ -1,8 +1,7 @@
 import { Event, FeatureFlag, Logger } from '@bugsnag/core';
 import { detect } from 'detect-browser';
-import { ApiBreadcrumb, ApiFeatureFlag, ApiStacktrace, Body } from './api-types';
+import { ApiBreadcrumb, ApiFeatureFlag, Body } from './api-types';
 import { Config } from './config';
-import { parseStacktrace } from './utils';
 
 // Types
 
@@ -24,8 +23,6 @@ export async function postEvent(event: Event, logger: Logger | undefined, config
     const handledState: any = event._handledState;
     const browser = detect(navigator.userAgent);
 
-    const err = getError(event.originalError);
-
     const endpoint = config.endpoints?.notify || 'https://notify.bugsnag.com/';
     const headers = {
       'Content-Type': 'application/json',
@@ -39,18 +36,11 @@ export async function postEvent(event: Event, logger: Logger | undefined, config
       notifier,
       events: [
         {
-          exceptions: [
-            {
-              errorClass: err.name,
-              type: 'browserjs',
-              message: err.message,
-              stacktrace:
-                err.stack
-                  .split('\n')
-                  .filter(line => !!line.trim())
-                  .map<ApiStacktrace>(parseStacktrace) ?? [],
-            },
-          ],
+          exceptions: event.errors.map(err => ({
+            ...err,
+            stacktrace: err.stacktrace.slice(0),
+            type: 'browserjs',
+          })),
           metaData: eventMetadata,
           app: event.app,
           breadcrumbs: event.breadcrumbs?.map<ApiBreadcrumb>(b => ({
@@ -88,31 +78,4 @@ export async function postEvent(event: Event, logger: Logger | undefined, config
   } catch (err) {
     logger?.error(err);
   }
-}
-
-function getError(maybeError: any): { name: string; message: string; stack: string } {
-  if (maybeError instanceof Error) {
-    return {
-      name: maybeError.name,
-      message: maybeError.message,
-      stack: maybeError.stack ?? '',
-    };
-  }
-  let str;
-  if (typeof maybeError === 'string') {
-    str = maybeError;
-  } else {
-    str = String(maybeError);
-  }
-  const error = Error(str);
-  return {
-    name: error.name,
-    message: error.message,
-    stack:
-      error.stack
-        ?.split('\n')
-        .filter(line => !!line.trim())
-        .splice(5) // This is the depth to drop all stack traces from inside the library
-        .join('\n') ?? '',
-  };
 }

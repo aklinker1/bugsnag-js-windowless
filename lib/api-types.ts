@@ -36,10 +36,10 @@ export interface ApiException {
 }
 
 export interface ApiStacktrace {
-  file: string;
-  lineNumber: number;
-  columnNumber: number;
-  method: string;
+  file?: string;
+  lineNumber?: number;
+  columnNumber?: number;
+  method?: string;
 }
 
 export interface ApiBreadcrumb {

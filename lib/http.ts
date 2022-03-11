@@ -121,7 +121,9 @@ export async function postEvent(event: Event, logger: Logger | undefined, config
                   .split('\n')
                   .filter(line => !!line.trim())
                   .map<ApiStacktrace>(line => {
-                    const matches = STACKTRACE_REGEX.exec(line)!;
+                    const matches = STACKTRACE_REGEX.exec(line);
+                    if (matches == null)
+                      throw Error(`Stacktrace line does not match expected regex: ${line}`);
                     return {
                       method: matches[1] || 'inline',
                       columnNumber: Number(matches[4]),

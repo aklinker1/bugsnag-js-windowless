@@ -4,7 +4,7 @@
     "emitDeclarationOnly": true,
     "declaration": true,
     "declarationMap": true,
-    "outFile": "dist/index.d.ts"
+    "declarationDir": "dist"
   },
   "include": ["lib/*"]
 }

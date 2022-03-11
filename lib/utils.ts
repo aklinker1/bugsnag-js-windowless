@@ -73,12 +73,12 @@ export function parseStacktrace(line: string): ApiStacktrace {
     // 4: column
     /^at (.*?) \((.*):(.*?):(.*?)\)$/,
   ];
-
+  const trimmedLine = line.trim();
   const match = STACKTRACE_REGEXES.reduce<RegExpMatchArray | null>(
-    (match, regex) => match ?? regex.exec(line),
+    (match, regex) => match ?? regex.exec(trimmedLine),
     null,
   );
-  if (match == null) throw Error(`Stacktrace line ("${line}") does not match known regex`);
+  if (match == null) throw Error(`Stacktrace line ("${trimmedLine}") does not match known regex`);
   return {
     method: match[1] || 'inline',
     columnNumber: Number(match[4]),

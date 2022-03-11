@@ -37,8 +37,9 @@ export async function postEvent(event: Event, logger: Logger | undefined, config
       events: [
         {
           exceptions: event.errors.map(err => ({
-            ...err,
-            stacktrace: err.stacktrace.slice(0),
+            message: err.errorMessage,
+            errorClass: err.errorClass,
+            stacktrace: err.stacktrace,
             type: 'browserjs',
           })),
           metaData: eventMetadata,

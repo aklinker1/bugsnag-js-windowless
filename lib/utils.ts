@@ -1,3 +1,6 @@
+import { Stackframe } from '@bugsnag/core';
+import { ApiStacktrace } from './api-types';
+
 export function getOsName(): string | undefined {
   const p = navigator.platform;
   if (p.toLowerCase().startsWith('linux')) {
@@ -54,4 +57,33 @@ export function redactMetadata(redactedKeys: Array<string | RegExp>, metadata: a
       }, {});
   }
   return metadata;
+}
+
+export function parseStacktrace(line: string): ApiStacktrace {
+  const STACKTRACE_REGEXES = [
+    // Ex: "notify@http://localhost:3000/demo/index.ts:27:20", "EventHandlerNonNull*@http://localhost:3000/demo/index.ts:32:3"
+    // 1: method
+    // 2: file
+    // 3: line
+    // 4: column
+    /^(.*?)@(.*):(.*?):(.*?)$/,
+    // Ex: "at Tg.notify (chrome-extension://some-extension-id/background.js:26:1464)"
+    // 1: method
+    // 2: file
+    // 3: line
+    // 4: column
+    /^at (.*?) \((.*):(.*?):(.*?)\)$/,
+  ];
+
+  const match = STACKTRACE_REGEXES.reduce<RegExpMatchArray | null>(
+    (match, regex) => match ?? regex.exec(line),
+    null,
+  );
+  if (match == null) throw Error(`Stacktrace line ("${line}") does not match known regex`);
+  return {
+    method: match[1] || 'inline',
+    columnNumber: Number(match[4]),
+    file: match[2],
+    lineNumber: Number(match[3]),
+  };
 }

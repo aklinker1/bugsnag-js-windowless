@@ -1,5 +1,6 @@
 import { Breadcrumb } from '@bugsnag/core';
 import { BreadcrumbTrail } from '../BreadcrumbTrail';
+import { describe, it, expect } from 'vitest';
 
 function createBreadcrumb(message: string) {
   const b = new Breadcrumb();

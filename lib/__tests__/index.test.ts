@@ -1,12 +1,12 @@
 import { OnErrorCallback } from '@bugsnag/core';
 import chance from 'chance';
 import { postEvent } from '../http';
-import type BugsnagClient from '../index';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-jest.mock('../http');
-const postEventMock = jest.mocked(postEvent);
+vi.mock('../http');
+const postEventMock = vi.mocked(postEvent);
 
-const addEventListenerSpy = jest.spyOn(self, 'addEventListener');
+const addEventListenerSpy = vi.spyOn(self, 'addEventListener');
 
 const rand = chance();
 
@@ -15,19 +15,18 @@ function sleep(ms = 0) {
 }
 
 describe('Windowless Bugsnag Client', () => {
-  let Bugsnag: typeof BugsnagClient;
-
   function resetBugsnag() {
-    jest.isolateModules(() => {
-      Bugsnag = require('../index').default;
-    });
+    vi.resetModules();
   }
 
-  beforeEach(resetBugsnag);
+  beforeEach(() => {
+    resetBugsnag();
+  });
 
   describe('config', () => {
     describe('apiKey', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const apiKey = rand.string();
         Bugsnag.start(apiKey);
         Bugsnag.notify(rand.string());
@@ -40,7 +39,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('appType', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const appType = rand.string();
 
         Bugsnag.start({
@@ -55,7 +55,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('appVersion', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const appVersion = rand.string();
 
         Bugsnag.start({
@@ -70,17 +71,22 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('autoDetectErrors', () => {
-      it.each([undefined, true])('should listen for global errors when %s', autoDetectErrors => {
-        Bugsnag.start({
-          apiKey: rand.string(),
-          autoDetectErrors,
-        });
+      it.each([undefined, true])(
+        'should listen for global errors when %s',
+        async autoDetectErrors => {
+          const { default: Bugsnag } = await import('../index');
+          Bugsnag.start({
+            apiKey: rand.string(),
+            autoDetectErrors,
+          });
 
-        expect(addEventListenerSpy).toBeCalledWith('error', expect.any(Function));
-        expect(addEventListenerSpy).toBeCalledWith('unhandledrejection', expect.any(Function));
-      });
+          expect(addEventListenerSpy).toBeCalledWith('error', expect.any(Function));
+          expect(addEventListenerSpy).toBeCalledWith('unhandledrejection', expect.any(Function));
+        },
+      );
 
-      it('should not listen for global errors when false', () => {
+      it('should not listen for global errors when false', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           autoDetectErrors: false,
@@ -91,7 +97,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('context', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const context = rand.string();
 
         Bugsnag.start({
@@ -106,7 +113,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('enabledBreadcrumbTypes', () => {
-      it('should accept all types of breadcrumbs when undefined', () => {
+      it('should accept all types of breadcrumbs when undefined', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
         });
@@ -122,7 +130,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(event.breadcrumbs[2]).toMatchObject({ type: 'manual' });
       });
 
-      it('should not add error breadcrumbs when notify is called if "error" is excluded from the list', () => {
+      it('should not add error breadcrumbs when notify is called if "error" is excluded from the list', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           enabledBreadcrumbTypes: ['log', 'manual'],
@@ -138,7 +147,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(event.breadcrumbs[1]).toMatchObject({ type: 'manual' });
       });
 
-      it('should not add log breadcrumbs when console methods are called if "log" is excluded from the list', () => {
+      it('should not add log breadcrumbs when console methods are called if "log" is excluded from the list', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           enabledBreadcrumbTypes: ['error', 'manual'],
@@ -156,7 +166,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('enabledErrorTypes', () => {
-      it('should not override autoDetectErrors', () => {
+      it('should not override autoDetectErrors', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           autoDetectErrors: false,
@@ -171,7 +182,8 @@ describe('Windowless Bugsnag Client', () => {
 
       it.each([undefined, true])(
         'should setup error listeners when unhandledExceptions=%s',
-        unhandledExceptions => {
+        async unhandledExceptions => {
+          const { default: Bugsnag } = await import('../index');
           Bugsnag.start({
             apiKey: rand.string(),
             enabledErrorTypes: {
@@ -183,7 +195,8 @@ describe('Windowless Bugsnag Client', () => {
         },
       );
 
-      it('should not setup error listeners when unhandledExceptions=false', () => {
+      it('should not setup error listeners when unhandledExceptions=false', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           enabledErrorTypes: {
@@ -196,7 +209,8 @@ describe('Windowless Bugsnag Client', () => {
 
       it.each([undefined, true])(
         'should setup unhandledrejection listeners when unhandledRejections=%s',
-        unhandledRejections => {
+        async unhandledRejections => {
+          const { default: Bugsnag } = await import('../index');
           Bugsnag.start({
             apiKey: rand.string(),
             enabledErrorTypes: {
@@ -208,7 +222,8 @@ describe('Windowless Bugsnag Client', () => {
         },
       );
 
-      it('should not setup unhandledrejection listeners when unhandledRejections=false', () => {
+      it('should not setup unhandledrejection listeners when unhandledRejections=false', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           enabledErrorTypes: {
@@ -221,14 +236,16 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('enabledReleaseStages', () => {
-      it('should send events to bugsnag when undefined', () => {
+      it('should send events to bugsnag when undefined', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start(rand.string());
         Bugsnag.notify(rand.string());
 
         expect(postEventMock).toBeCalled();
       });
 
-      it('should not send events to bugsnag when the release stage is not included in this list', () => {
+      it('should not send events to bugsnag when the release stage is not included in this list', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           releaseStage: 'development',
@@ -241,7 +258,8 @@ describe('Windowless Bugsnag Client', () => {
 
       it.each(['staging', 'production'])(
         "should send events to bugsnag when the release stage is %s and it's included in this list",
-        releaseStage => {
+        async releaseStage => {
+          const { default: Bugsnag } = await import('../index');
           Bugsnag.start({
             apiKey: rand.string(),
             releaseStage,
@@ -255,7 +273,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('endpoints', () => {
-      it('should be passed via the config when sending the event to bugsnag', () => {
+      it('should be passed via the config when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const endpoints = {
           notify: rand.string(),
           sessions: rand.string(),
@@ -273,7 +292,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('featureFlags', () => {
-      it('should initialize the internal feature flags to match when calling start()', () => {
+      it('should initialize the internal feature flags to match when calling start()', async () => {
+        const { default: Bugsnag } = await import('../index');
         const featureFlags = [
           {
             name: 'flag1',
@@ -313,7 +333,8 @@ describe('Windowless Bugsnag Client', () => {
 
       it.each([true, undefined])(
         "should generate an id when %s and one doesn't already exist",
-        generateAnonymousId => {
+        async generateAnonymousId => {
+          const { default: Bugsnag } = await import('../index');
           Bugsnag.start({
             apiKey: rand.string(),
             generateAnonymousId,
@@ -328,7 +349,8 @@ describe('Windowless Bugsnag Client', () => {
 
       it.each([true, undefined])(
         'should not generate an id when %s and one already exists',
-        generateAnonymousId => {
+        async generateAnonymousId => {
+          const { default: Bugsnag } = await import('../index');
           Bugsnag.start({
             apiKey: rand.string(),
             generateAnonymousId,
@@ -346,7 +368,8 @@ describe('Windowless Bugsnag Client', () => {
         },
       );
 
-      it('should not generate an id when false', () => {
+      it('should not generate an id when false', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           generateAnonymousId: false,
@@ -358,7 +381,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('logger', () => {
-      it('should not log anything when null', () => {
+      it('should not log anything when null', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           logger: null,
@@ -369,7 +393,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(config.logger).toBeFalsy();
       });
 
-      it('should use console.* to log when undefined', () => {
+      it('should use console.* to log when undefined', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           logger: undefined,
@@ -380,12 +405,13 @@ describe('Windowless Bugsnag Client', () => {
         expect(config.logger).toBeDefined();
       });
 
-      it('should use a custom logger when passed', () => {
+      it('should use a custom logger when passed', async () => {
+        const { default: Bugsnag } = await import('../index');
         const logger = {
-          debug: jest.fn(),
-          info: jest.fn(),
-          warn: jest.fn(),
-          error: jest.fn(),
+          debug: vi.fn(),
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
         };
 
         Bugsnag.start({
@@ -400,7 +426,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('maxBreadcrumbs', () => {
-      it('should effect the total number of breadcrumbs sent to bugsnag', () => {
+      it('should effect the total number of breadcrumbs sent to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           maxBreadcrumbs: 2,
@@ -419,7 +446,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(event.breadcrumbs[1]).toMatchObject({ message: '4' });
       });
 
-      it("should default to 25, matching @bugsnag/js's default", () => {
+      it("should default to 25, matching @bugsnag/js's default", async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
         });
@@ -436,7 +464,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('metadata', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const metadata = {
           test: {
             key: 'value',
@@ -456,9 +485,10 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('onBreadcrumb', () => {
-      it('should be run when leaving a breadcrumb', () => {
-        const cb1 = jest.fn();
-        const cb2 = jest.fn().mockReturnValue(true);
+      it('should be run when leaving a breadcrumb', async () => {
+        const { default: Bugsnag } = await import('../index');
+        const cb1 = vi.fn();
+        const cb2 = vi.fn().mockReturnValue(true);
 
         Bugsnag.start({
           apiKey: rand.string(),
@@ -473,7 +503,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(event.breadcrumbs).toHaveLength(1);
       });
 
-      it('should be able to prevent leaving a breadcrumb by returning false', () => {
+      it('should be able to prevent leaving a breadcrumb by returning false', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           onBreadcrumb: () => false,
@@ -487,9 +518,10 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('onError', () => {
-      it('should be run when calling notify()', () => {
-        const cb1 = jest.fn();
-        const cb2 = jest.fn().mockResolvedValue(undefined);
+      it('should be run when calling notify()', async () => {
+        const { default: Bugsnag } = await import('../index');
+        const cb1 = vi.fn();
+        const cb2 = vi.fn().mockResolvedValue(undefined);
 
         Bugsnag.start({
           apiKey: rand.string(),
@@ -516,6 +548,7 @@ describe('Windowless Bugsnag Client', () => {
           cb(null, false);
         },
       ])('should be able to prevent sending data to bugsnag', async onError => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           onError,
@@ -545,6 +578,7 @@ describe('Windowless Bugsnag Client', () => {
           cb(null, true);
         },
       ])('should not prevent sending data to bugsnag', async onError => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           onError,
@@ -559,14 +593,15 @@ describe('Windowless Bugsnag Client', () => {
 
     describe('plugins', () => {
       const plugin1 = {
-        load: jest.fn(),
-        destroy: jest.fn(),
+        load: vi.fn(),
+        destroy: vi.fn(),
       };
       const plugin2 = {
-        load: jest.fn(),
+        load: vi.fn(),
       };
 
-      it('should load them when calling start()', () => {
+      it('should load them when calling start()', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.start({
           apiKey: rand.string(),
           plugins: [plugin1, plugin2],
@@ -576,7 +611,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(plugin2.load).toBeCalledWith(Bugsnag);
       });
 
-      it('should not load them yet when calling createClient()', () => {
+      it('should not load them yet when calling createClient()', async () => {
+        const { default: Bugsnag } = await import('../index');
         Bugsnag.createClient({
           apiKey: rand.string(),
           plugins: [plugin1, plugin2],
@@ -586,7 +622,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(plugin2.load).not.toBeCalled();
       });
 
-      it('should load them when calling startSession()', () => {
+      it('should load them when calling startSession()', async () => {
+        const { default: Bugsnag } = await import('../index');
         const client = Bugsnag.createClient({
           apiKey: rand.string(),
           plugins: [plugin1, plugin2],
@@ -598,7 +635,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(plugin2.load).toBeCalledWith(client);
       });
 
-      it('should destroy them when calling pauseSession()', () => {
+      it('should destroy them when calling pauseSession()', async () => {
+        const { default: Bugsnag } = await import('../index');
         const client = Bugsnag.createClient({
           apiKey: rand.string(),
           plugins: [plugin1, plugin2],
@@ -609,7 +647,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(plugin1.destroy).toBeCalled();
       });
 
-      it('should load them again when calling resumeSession()', () => {
+      it('should load them again when calling resumeSession()', async () => {
+        const { default: Bugsnag } = await import('../index');
         const client = Bugsnag.createClient({
           apiKey: rand.string(),
           plugins: [plugin1, plugin2],
@@ -617,7 +656,7 @@ describe('Windowless Bugsnag Client', () => {
 
         client.startSession();
         client.pauseSession();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         client.resumeSession();
 
         expect(plugin1.load).toBeCalledWith(client);
@@ -626,7 +665,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('redactedKeys', () => {
-      it('should replace any value for metadata values for matching key with "[REDACTED]"', () => {
+      it('should replace any value for metadata values for matching key with "[REDACTED]"', async () => {
+        const { default: Bugsnag } = await import('../index');
         const input = {
           section: {
             'redacted-key-1': rand.natural(),
@@ -657,7 +697,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('releaseStage', () => {
-      it('should be passed via the event.app and config when sending the event to bugsnag', () => {
+      it('should be passed via the event.app and config when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const releaseStage = rand.string();
 
         Bugsnag.start({
@@ -674,7 +715,8 @@ describe('Windowless Bugsnag Client', () => {
     });
 
     describe('user', () => {
-      it('should be passed via the event when sending the event to bugsnag', () => {
+      it('should be passed via the event when sending the event to bugsnag', async () => {
+        const { default: Bugsnag } = await import('../index');
         const user = {
           name: rand.string(),
           email: rand.email(),
@@ -690,7 +732,8 @@ describe('Windowless Bugsnag Client', () => {
         expect(config.user).toEqual({ ...user, id: expect.any(String) });
       });
 
-      it('should use the specified id instead of generating one', () => {
+      it('should use the specified id instead of generating one', async () => {
+        const { default: Bugsnag } = await import('../index');
         const user = {
           id: rand.string(),
           name: rand.string(),
@@ -710,7 +753,8 @@ describe('Windowless Bugsnag Client', () => {
   });
 
   describe('internal logger', () => {
-    it('should not log anything when null', () => {
+    it('should not log anything when null', async () => {
+      const { default: Bugsnag } = await import('../index');
       Bugsnag.start({
         apiKey: rand.string(),
         logger: null,
@@ -721,7 +765,8 @@ describe('Windowless Bugsnag Client', () => {
       expect(config.logger).toBeFalsy();
     });
 
-    it('should use the unmodified console.* to log otherwise', () => {
+    it('should use the unmodified console.* to log otherwise', async () => {
+      const { default: Bugsnag } = await import('../index');
       Bugsnag.start({
         apiKey: rand.string(),
         logger: rand.pickone([undefined, console]),

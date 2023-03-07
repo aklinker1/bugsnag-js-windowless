@@ -1,5 +1,6 @@
 import { ApiStacktrace } from '../api-types';
 import { parseStacktrace } from '../utils';
+import { describe, it, expect } from 'vitest';
 
 describe('Utilities', () => {
   describe('parseStacktrace', () => {

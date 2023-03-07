@@ -3,7 +3,9 @@ import chance from 'chance';
 import { postEvent } from '../http';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../http');
+vi.mock('../http', () => ({
+  postEvent: vi.fn(),
+}));
 const postEventMock = vi.mocked(postEvent);
 
 const addEventListenerSpy = vi.spyOn(self, 'addEventListener');

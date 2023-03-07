@@ -34,6 +34,8 @@ class Client implements BugsnagStatic, ClientJs {
   #onBreadcrumbCallbacks = new Set<OnBreadcrumbCallback>();
   #ogConsole = { ...console };
   #internalLogger: Logger | undefined;
+  #removeOnError: (() => void) | undefined;
+  #removeOnUnhandledRejection: (() => void) | undefined;
 
   // BugsnagStatic methods
 
@@ -417,9 +419,17 @@ class Client implements BugsnagStatic, ClientJs {
         this.#config.enabledErrorTypes == null ||
         this.#config.enabledErrorTypes.unhandledRejections !== false;
 
-      if (enabledUnhandledExceptions) self.addEventListener('error', this.#onError);
-      if (enabledUnhandledRejections)
-        self.addEventListener('unhandledrejection', this.#onUnhandledRejection);
+      if (enabledUnhandledExceptions) {
+        const handler = (event: ErrorEvent) => this.#onError(event);
+        self.addEventListener('error', handler);
+        this.#removeOnError = () => self.removeEventListener('error', handler);
+      }
+      if (enabledUnhandledRejections) {
+        const handler = (event: PromiseRejectionEvent) => this.#onUnhandledRejection(event);
+        self.addEventListener('unhandledrejection', handler);
+        this.#removeOnUnhandledRejection = () =>
+          self.removeEventListener('unhandledrejection', handler);
+      }
     }
 
     // Override console methods
@@ -455,8 +465,8 @@ class Client implements BugsnagStatic, ClientJs {
     this.#config.plugins?.forEach(plugin => plugin.destroy?.());
 
     // Remove listeners for unhandled errors
-    self.removeEventListener('error', this.#onError);
-    self.removeEventListener('unhandledrejection', this.#onUnhandledRejection);
+    this.#removeOnError?.();
+    this.#removeOnUnhandledRejection?.();
 
     // Reset console
     console.debug = this.#ogConsole.debug;
